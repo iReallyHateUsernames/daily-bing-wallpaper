@@ -144,7 +144,7 @@ begin
   ResolutionPage := CreateInputOptionPage(MarketPage.ID,
     'Resolution Preferences', 'Select your preferred resolution',
     'The downloader will try your selected resolution first, then automatically fall back to lower resolutions if needed.',
-    False, False);
+    True, False);
   
   ResolutionPage.Add('4K Ultra HD (3840x2160) - Recommended');
   ResolutionPage.Add('2K QHD (2560x1440)');
