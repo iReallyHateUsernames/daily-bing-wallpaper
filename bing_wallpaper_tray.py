@@ -246,35 +246,50 @@ class TrayApp:
         """Load the app icon for system tray"""
         # Try to load PNG first (better compatibility), then ICO
         icon_files = ['tray_icon.png', 'app_icon.ico']
-        base_path = Path(__file__).parent
         
-        # If running as compiled exe, look in the executable directory
+        # Determine possible base paths
+        possible_paths = []
+        
+        # 1. For Nuitka onefile: sys._MEIPASS or the temp extraction directory
+        if hasattr(sys, '_MEIPASS'):
+            possible_paths.append(Path(sys._MEIPASS))
+        
+        # 2. Check if running as frozen (compiled)
         if getattr(sys, 'frozen', False):
-            base_path = Path(sys.executable).parent
+            # Executable directory
+            possible_paths.append(Path(sys.executable).parent)
+            # Temp extraction directory (Nuitka onefile)
+            if hasattr(sys, 'argv') and sys.argv:
+                possible_paths.append(Path(sys.argv[0]).parent)
         
-        for icon_file in icon_files:
-            icon_path = base_path / icon_file
-            try:
-                if icon_path.exists():
-                    # Load the icon file
-                    img = Image.open(icon_path)
-                    
-                    # Handle transparency for RGBA images
-                    if img.mode == 'RGBA':
-                        # Create white background
-                        background = Image.new('RGB', img.size, (255, 255, 255))
-                        background.paste(img, mask=img.split()[3])
-                        img = background
-                    elif img.mode != 'RGB':
-                        img = img.convert('RGB')
-                    
-                    # Resize to standard tray icon size
-                    if img.size != (64, 64):
-                        img = img.resize((64, 64), Image.Resampling.LANCZOS)
-                    
-                    return img
-            except Exception:
-                continue
+        # 3. Development: script directory
+        possible_paths.append(Path(__file__).parent)
+        
+        for base_path in possible_paths:
+            for icon_file in icon_files:
+                icon_path = base_path / icon_file
+                
+                try:
+                    if icon_path.exists():
+                        # Load the icon file
+                        img = Image.open(icon_path)
+                        
+                        # Handle transparency for RGBA images
+                        if img.mode == 'RGBA':
+                            # Create white background
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[3])
+                            img = background
+                        elif img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        
+                        # Resize to standard tray icon size
+                        if img.size != (64, 64):
+                            img = img.resize((64, 64), Image.Resampling.LANCZOS)
+                        
+                        return img
+                except Exception:
+                    continue
         
         # Fallback: Create a simple icon if no file found or loading failed
         img = Image.new('RGB', (64, 64), color='white')

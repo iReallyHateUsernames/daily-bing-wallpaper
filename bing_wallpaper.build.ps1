@@ -97,7 +97,8 @@ try {
     Info "Baue Tray-App mit Nuitka..."
     $trayNuitkaArgs = @()
     if ($OneFile) { $trayNuitkaArgs += "--onefile" }
-    $trayNuitkaArgs += "--windows-disable-console"
+    # Disable console - debug output goes to log file
+    $trayNuitkaArgs += "--windows-console-mode=disable"
     if ($IconIco) { $trayNuitkaArgs += "--windows-icon-from-ico=$IconIco" }
     if ($UseMSVC) { $trayNuitkaArgs += "--msvc=latest" }
     if ($LTO) { $trayNuitkaArgs += "--lto=yes" }
@@ -105,7 +106,9 @@ try {
       "--output-dir=$DistDir",
       "--remove-output",
       "--disable-ccache",
-      "--nofollow-imports"
+      "--nofollow-imports",
+      "--include-data-files=tray_icon.png=tray_icon.png",
+      "--include-data-files=app_icon.ico=app_icon.ico"
     )
     $trayNuitkaArgs += "--output-filename=$TrayExeName"
     
