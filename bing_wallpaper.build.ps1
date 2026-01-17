@@ -80,7 +80,8 @@ try {
     "--output-dir=$DistDir",
     "--remove-output",
     "--disable-ccache",
-    "--nofollow-imports"
+    "--nofollow-imports",
+    "--include-module=logger"
   )
   $nuitkaArgs += "--output-filename=$ExeName"
 
@@ -107,6 +108,7 @@ try {
       "--remove-output",
       "--disable-ccache",
       "--nofollow-imports",
+      "--include-module=logger",
       "--include-data-files=tray_icon.png=tray_icon.png",
       "--include-data-files=app_icon.ico=app_icon.ico"
     )

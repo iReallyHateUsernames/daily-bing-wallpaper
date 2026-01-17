@@ -22,9 +22,15 @@ except ImportError:
     print("Please install: pip install pystray pillow")
     sys.exit(1)
 
+# Import logging
+from logger import setup_logger
+
 # Configuration storage
 CONFIG_FILE = Path(os.getenv('APPDATA', '')) / 'BingWallpaperDownloader' / 'config.json'
 TASK_NAME = "BingWallpaperDownloader"
+
+# Initialize logger
+logger = setup_logger('tray')
 
 
 class WallpaperManager:
@@ -100,9 +106,14 @@ class WallpaperManager:
                 SPI_SETDESKWALLPAPER, 0, str(path.resolve()), 
                 SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE
             )
-            return result != 0
+            if result != 0:
+                logger.info(f"Wallpaper changed to: {path.name}")
+                return True
+            else:
+                logger.error(f"Failed to set wallpaper: {path}")
+                return False
         except Exception as e:
-            print(f"Error setting wallpaper: {e}")
+            logger.error(f"Error setting wallpaper: {e}", exc_info=True)
             return False
     
     def next_wallpaper(self):
@@ -188,35 +199,45 @@ class WallpaperManager:
                         return 'Ready' in line or 'Running' in line or 'Enabled' in line
             return False
         except Exception as e:
-            print(f"Error checking task status: {e}")
+            logger.error(f"Error checking task status: {e}", exc_info=True)
             return False
     
     def enable_auto_download(self):
         """Enable the scheduled task"""
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ['schtasks', '/Change', '/TN', TASK_NAME, '/ENABLE'],
-                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+                capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW
             )
-            self.auto_enabled = True
-            self.user_paused = False
-            self.save_config()
-            return True
+            if result.returncode == 0:
+                self.auto_enabled = True
+                self.user_paused = False
+                self.save_config()
+                logger.info("Auto-download enabled")
+                return True
+            else:
+                logger.error(f"Failed to enable task: {result.stderr}")
+                return False
         except Exception as e:
-            print(f"Error enabling task: {e}")
+            logger.error(f"Error enabling task: {e}", exc_info=True)
             return False
     
     def disable_auto_download(self):
         """Disable the scheduled task"""
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ['schtasks', '/Change', '/TN', TASK_NAME, '/DISABLE'],
-                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW
+                capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW
             )
-            self.auto_enabled = False
-            return True
+            if result.returncode == 0:
+                self.auto_enabled = False
+                logger.info("Auto-download disabled")
+                return True
+            else:
+                logger.error(f"Failed to disable task: {result.stderr}")
+                return False
         except Exception as e:
-            print(f"Error disabling task: {e}")
+            logger.error(f"Error disabling task: {e}", exc_info=True)
             return False
     
     def run_download_now(self):
@@ -287,9 +308,13 @@ class TrayApp:
                         if img.size != (64, 64):
                             img = img.resize((64, 64), Image.Resampling.LANCZOS)
                         
+                        logger.info(f"Icon loaded from: {icon_file}")
                         return img
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Failed to load {icon_file}: {e}")
                     continue
+        
+        logger.warning("Using fallback icon - icon files not found")
         
         # Fallback: Create a simple icon if no file found or loading failed
         img = Image.new('RGB', (64, 64), color='white')
@@ -425,13 +450,13 @@ class TrayApp:
 
 
 def main():
+    logger.info("=== Bing Wallpaper Tray App Starting ===")
     try:
         app = TrayApp()
+        logger.info("Tray app initialized successfully")
         app.run()
     except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
 
 

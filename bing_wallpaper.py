@@ -12,6 +12,9 @@ import urllib.parse
 
 import requests
 
+# Import logging
+from logger import setup_logger
+
 BING_BASE = "https://www.bing.com"
 HEADERS = {
     "User-Agent": (
@@ -23,6 +26,9 @@ HEADERS = {
 
 # Config file location
 CONFIG_FILE = Path(os.getenv('APPDATA', '')) / 'BingWallpaperDownloader' / 'config.json'
+
+# Initialize logger
+logger = setup_logger('downloader')
 
 def load_config() -> dict:
     """Load configuration from JSON file"""
@@ -39,11 +45,23 @@ def fetch_image_json(mkt: str, idx: int) -> Optional[dict]:
         f"{BING_BASE}/HPImageArchive.aspx?"
         f"format=js&idx={idx}&n=1&mkt={urllib.parse.quote(mkt)}"
     )
-    r = requests.get(url, headers=HEADERS, timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    imgs = data.get("images") or []
-    return imgs[0] if imgs else None
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        imgs = data.get("images") or []
+        result = imgs[0] if imgs else None
+        if result:
+            logger.info(f"Fetched image metadata for market={mkt}, idx={idx}")
+        else:
+            logger.warning(f"No images found for market={mkt}, idx={idx}")
+        return result
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch image metadata: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error fetching metadata: {e}", exc_info=True)
+        return None
 
 def build_candidate_urls(img: dict, preferred_res: List[str]) -> List[str]:
     urls = []
@@ -83,13 +101,17 @@ def download_first(urls: List[str]) -> Tuple[bytes, str]:
                 r.raise_for_status()
                 data = r.content
                 if len(data) < 10 * 1024:
-                    last = RuntimeError("Antwort zu klein")
+                    last = RuntimeError("Response too small")
+                    logger.warning(f"Image too small from {u[:50]}...")
                     continue
                 ct = r.headers.get("Content-Type", "") or "image/jpeg"
+                logger.info(f"Successfully downloaded image ({len(data)} bytes)")
                 return data, ct
             except Exception as e:
+                logger.warning(f"Failed to download from {u[:50]}...: {e}")
                 last = e
-    raise last or RuntimeError("Download fehlgeschlagen")
+    logger.error("All download attempts failed")
+    raise last or RuntimeError("Download failed")
 
 def sanitize(name: str) -> str:
     for ch in '<>:"/\\|?*':
@@ -156,10 +178,12 @@ def pick_and_download(markets: List[str], idx: int, preferred_res: List[str]) ->
     return None
 
 def main():
+    logger.info("=== Bing Wallpaper Downloader Starting ===")
     import argparse
     
     # Load config file first
     config = load_config()
+    logger.info(f"Config loaded from: {CONFIG_FILE}")
     
     # Set defaults from config file, can be overridden by CLI args
     p = argparse.ArgumentParser("Bing week downloader (HPImageArchive) with robust dedupe")
@@ -178,8 +202,10 @@ def main():
     args = p.parse_args()
 
     out_dir = Path(args.out); out_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Download directory: {out_dir}")
     preferred_res = [x.strip() for x in args.res.split(",") if x.strip()]
     markets = [args.mkt.strip()] + [m.strip() for m in args.fallback_mkts.split(",") if m.strip()]
+    logger.info(f"Markets: {markets}, Resolutions: {preferred_res}")
 
     saved: List[Path] = []
     latest_path: Optional[Path] = None
@@ -196,8 +222,10 @@ def main():
             i += 1
 
     for idx in range(0, min(8, max(1, args.count))):
+        logger.info(f"Fetching image idx={idx}")
         res = pick_and_download(markets, idx, preferred_res)
         if not res:
+            logger.warning(f"Failed to download image idx={idx}")
             continue
         data, ct, img = res
         fname = build_filename(img, ct, name_mode=args.name_mode)
@@ -205,24 +233,29 @@ def main():
 
         if args.mode == "skip" and target.exists():
             # kein Speichern, kein _1
+            logger.info(f"Skipping existing file: {fname}")
             saved.append(target)
             if idx == 0:
                 latest_path = target
             continue
         elif args.mode == "overwrite":
             target.write_bytes(data)
+            logger.info(f"Overwrote: {fname}")
         else:  # unique
             target = next_unique_path(target)
             target.write_bytes(data)
+            logger.info(f"Saved: {target.name}")
 
         saved.append(target)
         if idx == 0:
             latest_path = target
 
     if not saved:
+        logger.info("No new images downloaded (all already exist)")
         print("Nichts heruntergeladen oder alles vorhanden.")
         return 0
 
+    logger.info(f"Downloaded {len(saved)} images")
     print("Gespeichert:")
     for pth in saved:
         print(f"- {pth.name}")
@@ -230,10 +263,14 @@ def main():
     if args.set_latest and latest_path:
         try:
             set_wallpaper(latest_path)
+            logger.info(f"Wallpaper set to: {latest_path.name}")
             print(f"Wallpaper gesetzt: {latest_path}")
         except Exception as e:
+            logger.error(f"Failed to set wallpaper: {e}", exc_info=True)
             print(f"Wallpaper setzen fehlgeschlagen: {e}", file=sys.stderr)
             return 1
+    
+    logger.info("=== Bing Wallpaper Downloader Completed Successfully ===")
     return 0
 
 if __name__ == "__main__":
