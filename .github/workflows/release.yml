@@ -1,0 +1,84 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0, v1.1.0, etc.
+
+jobs:
+  build-and-release:
+    name: Build and Create Release
+    runs-on: windows-latest
+    permissions:
+      contents: write  # Required to create releases
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install Chocolatey (for Inno Setup)
+      run: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+      shell: powershell
+    
+    - name: Install Inno Setup
+      run: choco install innosetup -y
+      shell: powershell
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install nuitka requests pystray pillow
+    
+    - name: Build executables
+      run: |
+        python -m nuitka --onefile --windows-disable-console --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --output-filename=BingWallpaperDownloader.exe bing_wallpaper.py
+        python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --include-data-files=tray_icon.png=tray_icon.png --include-data-files=app_icon.ico=app_icon.ico --output-filename=BingWallpaperTray.exe bing_wallpaper_tray.py
+    
+    - name: Build installer
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+      shell: powershell
+    
+    - name: Get version from tag
+      id: get_version
+      run: |
+        $version = "${{ github.ref_name }}"
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+      shell: powershell
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ steps.get_version.outputs.VERSION }}
+        draft: false
+        prerelease: false
+        files: |
+          installer_output/BingWallpaperDownloader_Setup.exe
+        body: |
+          ## 🎨 Bing Wallpaper Downloader ${{ steps.get_version.outputs.VERSION }}
+          
+          ### 📥 Download & Install
+          
+          Download `BingWallpaperDownloader_Setup.exe` below and run the installer.
+          
+          ### 🔄 Changes in this Release
+          
+          See the [commit history](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}) for details.
+          
+          ### 💻 Requirements
+          - Windows 10 or later
+          - ~20MB disk space
+          
+          ### 📖 Documentation
+          
+          See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for full documentation.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
