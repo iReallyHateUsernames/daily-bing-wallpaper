@@ -77,6 +77,21 @@ var
   ImageCountVar: Integer;
   SetLatestVar: Boolean;
 
+{ Get user's Pictures folder path from Windows Shell }
+function GetPicturesFolder(): String;
+var
+  PicturesPath: String;
+begin
+  { Try to get Pictures folder from registry }
+  if RegQueryStringValue(HKEY_CURRENT_USER, 
+    'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders',
+    'My Pictures', PicturesPath) then
+    Result := PicturesPath
+  else
+    { Fallback to Documents\Pictures if registry fails }
+    Result := ExpandConstant('{userdocs}\Pictures');
+end;
+
 { Helper function to convert boolean to JSON string }
 function GetJsonBool(value: Boolean): String;
 begin
@@ -107,7 +122,7 @@ begin
   if DownloadFolderVar <> '' then
     Result := DownloadFolderVar
   else
-    Result := ExpandConstant('{userpics}\BingWallpapers');
+    Result := GetPicturesFolder() + '\BingWallpapers';
 end;
 
 { Create custom wizard pages }
@@ -121,7 +136,7 @@ begin
     'Select the folder where Bing wallpapers will be downloaded, then click Next.',
     False, '');
   
-  PicturesPath := ExpandConstant('{userpics}\BingWallpapers');
+  PicturesPath := GetPicturesFolder() + '\BingWallpapers';
   DownloadFolderPage.Add('');
   DownloadFolderPage.Values[0] := PicturesPath;
   
@@ -369,7 +384,7 @@ var
   ConfigContent: AnsiString;
   StartPos, EndPos: Integer;
 begin
-  Result := ExpandConstant('{userpics}\BingWallpapers'); { Default }
+  Result := GetPicturesFolder() + '\BingWallpapers'; { Default }
   ConfigPath := ExpandConstant('{userappdata}\BingWallpaperDownloader\config.json');
   
   if FileExists(ConfigPath) then
