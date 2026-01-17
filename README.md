@@ -97,6 +97,36 @@ Output files:
 | `-IconIco` | `""` | Custom icon for EXE |
 | `-LTO` | `$true` | Link-time optimization |
 
+### Running Tests
+
+The project includes comprehensive unit tests using pytest:
+
+```powershell
+# Install test dependencies
+pip install pytest
+
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest test_bing_wallpaper.py -v
+```
+
+**Test Coverage:**
+- Configuration file loading and validation
+- Filename sanitization and slug extraction
+- Date parsing from image metadata
+- URL candidate generation
+- File extension detection
+- Tray app configuration management
+- Wallpaper list scanning
+- Task scheduler integration
+
+**37 tests** covering core functionality and edge cases.
+
 ### Manual Usage (Without Installer)
 
 Run the standalone EXE with command-line arguments:
