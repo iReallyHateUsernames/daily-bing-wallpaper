@@ -35,13 +35,38 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka requests pystray pillow
+        pip install requests pystray pillow
     
-    - name: Build executables
-      run: |
-        echo yes | python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --output-filename=BingWallpaperDownloader.exe bing_wallpaper.py
-        echo yes | python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --include-data-files=tray_icon.png=tray_icon.png --include-data-files=app_icon.ico=app_icon.ico --output-filename=BingWallpaperTray.exe bing_wallpaper_tray.py
-      shell: cmd
+    - name: Build main executable
+      uses: Nuitka/Nuitka-Action@main
+      with:
+        nuitka-version: main
+        script-name: bing_wallpaper.py
+        mode: onefile
+        windows-console-mode: disable
+        msvc: latest
+        lto: yes
+        output-dir: dist
+        include-module: logger
+        output-file: BingWallpaperDownloader.exe
+        assume-yes-for-downloads: true
+    
+    - name: Build tray app executable
+      uses: Nuitka/Nuitka-Action@main
+      with:
+        nuitka-version: main
+        script-name: bing_wallpaper_tray.py
+        mode: onefile
+        windows-console-mode: disable
+        msvc: latest
+        lto: yes
+        output-dir: dist
+        include-module: logger
+        include-data-files: |
+          tray_icon.png=tray_icon.png
+          app_icon.ico=app_icon.ico
+        output-file: BingWallpaperTray.exe
+        assume-yes-for-downloads: true
     
     - name: Build installer
       run: |
