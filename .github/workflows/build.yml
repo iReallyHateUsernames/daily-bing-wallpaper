@@ -27,7 +27,7 @@ jobs:
     
     - name: Build main executable
       run: |
-        python -m nuitka --onefile --windows-disable-console --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --output-filename=BingWallpaperDownloader.exe bing_wallpaper.py
+        python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --output-filename=BingWallpaperDownloader.exe bing_wallpaper.py
     
     - name: Build tray app executable
       run: |
