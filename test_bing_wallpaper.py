@@ -26,13 +26,23 @@ class TestConfigLoading:
     """Test configuration file loading"""
     
     def test_load_config_file_not_exists(self, monkeypatch):
-        """Test loading config when file doesn't exist"""
+        """Test loading config when file doesn't exist - should create default config"""
         with tempfile.TemporaryDirectory() as tmpdir:
             fake_config = Path(tmpdir) / "nonexistent" / "config.json"
             monkeypatch.setattr("bing_wallpaper.CONFIG_FILE", fake_config)
             
             config = load_config()
-            assert config == {}
+            # Should return default config with all required fields
+            assert "download_folder" in config
+            assert "market" in config
+            assert "fallback_markets" in config
+            assert "resolution" in config
+            assert "image_count" in config
+            assert "set_latest" in config
+            assert "file_mode" in config
+            assert "name_mode" in config
+            # Verify the config file was created
+            assert fake_config.exists()
     
     def test_load_config_valid_json(self, monkeypatch):
         """Test loading valid config file"""

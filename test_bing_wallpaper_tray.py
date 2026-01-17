@@ -33,7 +33,18 @@ class TestWallpaperManagerConfig:
                 with mock.patch('bing_wallpaper_tray.WallpaperManager.is_task_enabled', return_value=False):
                     with mock.patch('bing_wallpaper_tray.WallpaperManager.refresh_wallpaper_list'):
                         manager = WallpaperManager()
-                        assert manager.config == {}
+                        # Should return default config with all required fields
+                        assert "download_folder" in manager.config
+                        assert "market" in manager.config
+                        assert "fallback_markets" in manager.config
+                        assert "resolution" in manager.config
+                        assert "image_count" in manager.config
+                        assert "set_latest" in manager.config
+                        assert "file_mode" in manager.config
+                        assert "name_mode" in manager.config
+                        assert "user_paused" in manager.config
+                        # Verify the config file was created
+                        assert fake_config.exists()
     
     def test_load_config_valid_file(self, monkeypatch):
         """Test loading valid config file"""
