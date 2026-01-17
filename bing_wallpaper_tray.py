@@ -244,27 +244,39 @@ class TrayApp:
         
     def create_icon_image(self) -> Image.Image:
         """Load the app icon for system tray"""
-        # Try to load the app icon from the same directory as the executable
-        icon_path = Path(__file__).parent / 'app_icon.ico'
+        # Try to load PNG first (better compatibility), then ICO
+        icon_files = ['tray_icon.png', 'app_icon.ico']
+        base_path = Path(__file__).parent
         
         # If running as compiled exe, look in the executable directory
         if getattr(sys, 'frozen', False):
-            icon_path = Path(sys.executable).parent / 'app_icon.ico'
+            base_path = Path(sys.executable).parent
         
-        try:
-            if icon_path.exists():
-                # Load the ICO file and use it
-                img = Image.open(icon_path)
-                # Convert to RGB if needed and resize to appropriate tray size
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-                # Resize to 64x64 for best quality in tray
-                img = img.resize((64, 64), Image.Resampling.LANCZOS)
-                return img
-        except Exception as e:
-            print(f"Could not load app_icon.ico: {e}")
+        for icon_file in icon_files:
+            icon_path = base_path / icon_file
+            try:
+                if icon_path.exists():
+                    # Load the icon file
+                    img = Image.open(icon_path)
+                    
+                    # Handle transparency for RGBA images
+                    if img.mode == 'RGBA':
+                        # Create white background
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        background.paste(img, mask=img.split()[3])
+                        img = background
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    
+                    # Resize to standard tray icon size
+                    if img.size != (64, 64):
+                        img = img.resize((64, 64), Image.Resampling.LANCZOS)
+                    
+                    return img
+            except Exception:
+                continue
         
-        # Fallback: Create a simple icon if file not found
+        # Fallback: Create a simple icon if no file found or loading failed
         img = Image.new('RGB', (64, 64), color='white')
         draw = ImageDraw.Draw(img)
         
