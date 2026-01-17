@@ -2,6 +2,8 @@
 import argparse
 import ctypes
 import hashlib
+import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +20,19 @@ HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
+
+# Config file location
+CONFIG_FILE = Path(os.getenv('APPDATA', '')) / 'BingWallpaperDownloader' / 'config.json'
+
+def load_config() -> dict:
+    """Load configuration from JSON file"""
+    if not CONFIG_FILE.exists():
+        return {}
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 def fetch_image_json(mkt: str, idx: int) -> Optional[dict]:
     url = (
@@ -142,19 +157,24 @@ def pick_and_download(markets: List[str], idx: int, preferred_res: List[str]) ->
 
 def main():
     import argparse
+    
+    # Load config file first
+    config = load_config()
+    
+    # Set defaults from config file, can be overridden by CLI args
     p = argparse.ArgumentParser("Bing week downloader (HPImageArchive) with robust dedupe")
-    p.add_argument("--mkt", default="de-DE")
-    p.add_argument("--fallback-mkts", default="en-US")
-    p.add_argument("--count", type=int, default=8)
-    p.add_argument("--out", default=str(Path.home() / "Pictures" / "BingWallpapers"))
-    p.add_argument("--res", default="UHD,3840x2160,2560x1440,1920x1200,1920x1080")
-    p.add_argument("--mode", choices=["skip","unique","overwrite"], default="skip",
+    p.add_argument("--mkt", default=config.get("market", "de-DE"))
+    p.add_argument("--fallback-mkts", default=config.get("fallback_markets", "en-US"))
+    p.add_argument("--count", type=int, default=config.get("image_count", 8))
+    p.add_argument("--out", default=config.get("download_folder", str(Path.home() / "Pictures" / "BingWallpapers")))
+    p.add_argument("--res", default=config.get("resolution", "UHD,3840x2160,2560x1440,1920x1200,1920x1080"))
+    p.add_argument("--mode", choices=["skip","unique","overwrite"], default=config.get("file_mode", "skip"),
                    help="skip: existierende Zieldatei nicht neu schreiben; "
                         "unique: falls gleicher Name existiert, _1, _2 anhängen; "
                         "overwrite: bestehende Datei gleichen Namens überschreiben.")
-    p.add_argument("--name-mode", choices=["slug","title"], default="slug",
+    p.add_argument("--name-mode", choices=["slug","title"], default=config.get("name_mode", "slug"),
                    help="Dateiname aus OHR-Slug (robust) oder aus Titel.")
-    p.add_argument("--set-latest", action="store_true")
+    p.add_argument("--set-latest", action="store_true", default=config.get("set_latest", False))
     args = p.parse_args()
 
     out_dir = Path(args.out); out_dir.mkdir(parents=True, exist_ok=True)

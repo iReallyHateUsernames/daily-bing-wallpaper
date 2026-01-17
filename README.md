@@ -23,11 +23,11 @@ Automatically downloads daily Bing wallpapers and sets them as your Windows desk
    - **Market Selection**: Pick your region (affects available images)
    - **Resolution**: Choose your preferred quality (4K recommended)
    - **Download Settings**: 
-     - Number of wallpapers to download (1-8)
-     - Whether to automatically set as desktop background
-   - **Autostart Options**:
-     - Run daily at system startup (recommended)
-     - Run when you log in
+      - Number of wallpapers to download (1-8)
+      - Whether to automatically set as desktop background
+   - **Startup Options**:
+      - Run daily and at login (downloads wallpaper automatically)
+      - Start system tray app at login (for manual control and navigation)
 
 ### What Gets Installed
 
@@ -161,18 +161,23 @@ daily-bing-wallpaper/
 
 ## Autostart Configuration
 
-The installer can configure two types of autostart:
+The installer offers two independent startup options:
 
-### Daily at System Startup (Recommended)
+### Automatic Wallpaper Download
 - Uses Windows Task Scheduler
-- Runs daily at 9 AM + 2 minutes after boot
-- Runs even if user isn't logged in
+- Runs daily at 9 AM + 1 minute after user login
+- Automatically downloads and sets wallpaper
+- Requires user to be logged in (for wallpaper setting)
 - Won't start if already running
 
-### At User Login
-- Creates shortcut in Startup folder
-- Only runs when you log in
-- Simpler but less flexible
+### System Tray Manager
+- Starts at user login
+- Provides manual control over downloads
+- Navigate through wallpaper history
+- Enable/disable automatic downloads
+- See current wallpaper info
+
+**You can enable both, either one, or neither** - they work independently.
 
 ## Troubleshooting
 

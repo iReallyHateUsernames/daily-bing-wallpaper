@@ -36,9 +36,8 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "autostart"; Description: "Run daily at system startup (downloads wallpaper automatically)"; GroupDescription: "Startup Options:"
-Name: "autostartwithlogin"; Description: "Run when user logs in"; GroupDescription: "Startup Options:"
-Name: "starttray"; Description: "Start system tray app at login (for easy management)"; GroupDescription: "System Tray:"
+Name: "autostart"; Description: "Run daily and at login (downloads wallpaper automatically)"; GroupDescription: "Startup Options:"
+Name: "starttray"; Description: "Start system tray app at login (for manual control and navigation)"; GroupDescription: "Startup Options:"
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -77,6 +76,30 @@ var
   ImageCountVar: Integer;
   SetLatestVar: Boolean;
 
+{ Helper function to convert boolean to JSON string }
+function GetJsonBool(value: Boolean): String;
+begin
+  if value then
+    Result := 'true'
+  else
+    Result := 'false';
+end;
+
+{ Helper function to escape backslashes for JSON }
+function EscapeJsonString(value: String): String;
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := 1 to Length(value) do
+  begin
+    if value[i] = '\' then
+      Result := Result + '\\'
+    else
+      Result := Result + value[i];
+  end;
+end;
+
 { Get the configured download folder }
 function GetDownloadFolder(Param: String): String;
 begin
@@ -84,23 +107,6 @@ begin
     Result := DownloadFolderVar
   else
     Result := ExpandConstant('{userdocs}\Pictures\BingWallpapers');
-end;
-
-{ Get command line parameters based on user configuration }
-function GetCommandLineParams: String;
-var
-  Params: String;
-begin
-  Params := '--out "' + GetDownloadFolder('') + '"';
-  Params := Params + ' --mkt ' + MarketVar;
-  Params := Params + ' --res ' + ResolutionVar;
-  Params := Params + ' --count ' + IntToStr(ImageCountVar);
-  Params := Params + ' --mode skip';
-  
-  if SetLatestVar then
-    Params := Params + ' --set-latest';
-  
-  Result := Params;
 end;
 
 { Create custom wizard pages }
@@ -136,8 +142,8 @@ begin
   
   { Resolution Selection Page }
   ResolutionPage := CreateInputOptionPage(MarketPage.ID,
-    'Resolution Preferences', 'Select preferred image resolution',
-    'The downloader will try resolutions in order. Higher resolutions are tried first.',
+    'Resolution Preferences', 'Select your preferred resolution',
+    'The downloader will try your selected resolution first, then automatically fall back to lower resolutions if needed.',
     False, False);
   
   ResolutionPage.Add('4K Ultra HD (3840x2160) - Recommended');
@@ -247,20 +253,20 @@ begin
     { Create download folder }
     ForceDirectories(DownloadFolderVar);
     
-    { Save configuration to registry }
-    RegWriteStringValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 
-      'DownloadFolder', DownloadFolderVar);
-    RegWriteStringValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 
-      'Market', MarketVar);
-    RegWriteStringValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 
-      'Resolution', ResolutionVar);
-    RegWriteDWordValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 
-      'ImageCount', ImageCountVar);
-    RegWriteDWordValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 
-      'SetLatest', Integer(SetLatestVar));
+    { Save configuration to JSON file }
+    SaveStringToFile(ExpandConstant('{userappdata}\BingWallpaperDownloader\config.json'),
+      '{' + #13#10 +
+      '  "download_folder": "' + EscapeJsonString(DownloadFolderVar) + '",' + #13#10 +
+      '  "market": "' + MarketVar + '",' + #13#10 +
+      '  "fallback_markets": "en-US",' + #13#10 +
+      '  "resolution": "' + ResolutionVar + '",' + #13#10 +
+      '  "image_count": ' + IntToStr(ImageCountVar) + ',' + #13#10 +
+      '  "set_latest": ' + GetJsonBool(SetLatestVar) + ',' + #13#10 +
+      '  "file_mode": "skip",' + #13#10 +
+      '  "name_mode": "slug"' + #13#10 +
+      '}', False);
     
     ExePath := ExpandConstant('{app}\{#MyAppExeName}');
-    Params := GetCommandLineParams;
     TaskName := 'BingWallpaperDownloader';
     
     { Create scheduled task for daily autostart if selected }
@@ -285,10 +291,10 @@ begin
         '        <DaysInterval>1</DaysInterval>' + #13#10 +
         '      </ScheduleByDay>' + #13#10 +
         '    </CalendarTrigger>' + #13#10 +
-        '    <BootTrigger>' + #13#10 +
+        '    <LogonTrigger>' + #13#10 +
         '      <Enabled>true</Enabled>' + #13#10 +
-        '      <Delay>PT2M</Delay>' + #13#10 +
-        '    </BootTrigger>' + #13#10 +
+        '      <Delay>PT1M</Delay>' + #13#10 +
+        '    </LogonTrigger>' + #13#10 +
         '  </Triggers>' + #13#10 +
         '  <Principals>' + #13#10 +
         '    <Principal>' + #13#10 +
@@ -318,7 +324,6 @@ begin
         '  <Actions Context="Author">' + #13#10 +
         '    <Exec>' + #13#10 +
         '      <Command>"' + ExePath + '"</Command>' + #13#10 +
-        '      <Arguments>' + Params + '</Arguments>' + #13#10 +
         '    </Exec>' + #13#10 +
         '  </Actions>' + #13#10 +
         '</Task>', False);
@@ -327,20 +332,6 @@ begin
         '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
       
       DeleteFile(TaskXml);
-    end;
-    
-    { Create startup shortcut for login-based autostart if selected }
-    if WizardIsTaskSelected('autostartwithlogin') then
-    begin
-      CreateShellLink(
-        ExpandConstant('{userstartup}\{#MyAppName}.lnk'),
-        'Bing Wallpaper Downloader',
-        ExePath,
-        Params,
-        '',
-        ExePath,
-        0,
-        SW_SHOWNORMAL);
     end;
     
     { Create tray app startup shortcut if selected }
@@ -373,14 +364,17 @@ begin
     DeleteFile(ExpandConstant('{userstartup}\{#MyAppName}.lnk'));
     DeleteFile(ExpandConstant('{userstartup}\{#MyAppName} Manager.lnk'));
     
-    { Remove registry settings }
-    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader');
+    { Remove config file and app data folder }
+    DelTree(ExpandConstant('{userappdata}\BingWallpaperDownloader'), True, True, True);
     
     { Ask if user wants to delete downloaded wallpapers }
     if MsgBox('Do you want to delete all downloaded wallpapers?', mbConfirmation, MB_YESNO) = IDYES then
     begin
-      if RegQueryStringValue(HKEY_CURRENT_USER, 'Software\BingWallpaperDownloader', 'DownloadFolder', DownloadFolderVar) then
+      { Try to load download folder from config before it's deleted }
+      if FileExists(ExpandConstant('{userappdata}\BingWallpaperDownloader\config.json')) then
       begin
+        { Default to Pictures\BingWallpapers if config read fails }
+        DownloadFolderVar := ExpandConstant('{userdocs}\Pictures\BingWallpapers');
         DelTree(DownloadFolderVar, True, True, True);
       end;
     end;

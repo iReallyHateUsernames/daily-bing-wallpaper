@@ -9,7 +9,6 @@ import json
 import os
 import subprocess
 import sys
-import winreg
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -24,7 +23,7 @@ except ImportError:
     sys.exit(1)
 
 # Configuration storage
-CONFIG_FILE = Path(os.getenv('APPDATA')) / 'BingWallpaperDownloader' / 'tray_config.json'
+CONFIG_FILE = Path(os.getenv('APPDATA', '')) / 'BingWallpaperDownloader' / 'config.json'
 TASK_NAME = "BingWallpaperDownloader"
 
 
@@ -39,43 +38,28 @@ class WallpaperManager:
         self.refresh_wallpaper_list()
         
     def load_config(self) -> dict:
-        """Load configuration from registry and config file"""
-        config = {}
-        
-        # Try to load from registry first (set by installer)
+        """Load configuration from JSON file"""
+        if not CONFIG_FILE.exists():
+            return {}
         try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\BingWallpaperDownloader', 0, winreg.KEY_READ)
-            try:
-                config['download_folder'] = winreg.QueryValueEx(key, 'DownloadFolder')[0]
-            except:
-                pass
-            try:
-                config['market'] = winreg.QueryValueEx(key, 'Market')[0]
-            except:
-                pass
-            winreg.CloseKey(key)
-        except:
-            pass
-        
-        # Load additional settings from config file
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    file_config = json.load(f)
-                    config.update(file_config)
-            except:
-                pass
-        
-        return config
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
     
     def save_config(self):
         """Save configuration to file"""
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump({
-                'user_paused': self.user_paused,
-                'last_manual_selection': datetime.now().isoformat()
-            }, f, indent=2)
+        
+        # Load existing config
+        config = self.load_config()
+        
+        # Update with tray-specific settings
+        config['user_paused'] = self.user_paused
+        config['last_manual_selection'] = datetime.now().isoformat()
+        
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2)
     
     def refresh_wallpaper_list(self):
         """Scan wallpaper directory and build sorted list"""
