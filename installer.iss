@@ -107,7 +107,7 @@ begin
   if DownloadFolderVar <> '' then
     Result := DownloadFolderVar
   else
-    Result := ExpandConstant('{userdocs}\Pictures\BingWallpapers');
+    Result := ExpandConstant('{userpics}\BingWallpapers');
 end;
 
 { Create custom wizard pages }
@@ -121,7 +121,7 @@ begin
     'Select the folder where Bing wallpapers will be downloaded, then click Next.',
     False, '');
   
-  PicturesPath := ExpandConstant('{userdocs}\Pictures\BingWallpapers');
+  PicturesPath := ExpandConstant('{userpics}\BingWallpapers');
   DownloadFolderPage.Add('');
   DownloadFolderPage.Values[0] := PicturesPath;
   
@@ -369,7 +369,7 @@ var
   ConfigContent: AnsiString;
   StartPos, EndPos: Integer;
 begin
-  Result := ExpandConstant('{userdocs}\Pictures\BingWallpapers'); { Default }
+  Result := ExpandConstant('{userpics}\BingWallpapers'); { Default }
   ConfigPath := ExpandConstant('{userappdata}\BingWallpaperDownloader\config.json');
   
   if FileExists(ConfigPath) then
