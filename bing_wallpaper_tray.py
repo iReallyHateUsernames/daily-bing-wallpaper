@@ -353,8 +353,9 @@ class TrayApp:
         possible_paths = []
         
         # 1. For Nuitka onefile: sys._MEIPASS or the temp extraction directory
-        if hasattr(sys, '_MEIPASS'):
-            possible_paths.append(Path(sys._MEIPASS))
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            possible_paths.append(Path(meipass))
         
         # 2. Check if running as frozen (compiled)
         if getattr(sys, 'frozen', False):

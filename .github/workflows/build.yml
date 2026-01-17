@@ -28,10 +28,15 @@ jobs:
     - name: Build main executable
       run: |
         python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --output-filename=BingWallpaperDownloader.exe bing_wallpaper.py
+      env:
+        NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"
     
     - name: Build tray app executable
       run: |
         python -m nuitka --onefile --windows-console-mode=disable --msvc=latest --lto=yes --output-dir=dist --remove-output --include-module=logger --include-data-files=tray_icon.png=tray_icon.png --include-data-files=app_icon.ico=app_icon.ico --output-filename=BingWallpaperTray.exe bing_wallpaper_tray.py
+      env:
+        NUITKA_ASSUME_YES_FOR_DOWNLOADS: "1"
+      shell: pwsh
     
     - name: Upload executables as artifacts
       uses: actions/upload-artifact@v4
