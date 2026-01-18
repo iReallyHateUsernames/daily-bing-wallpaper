@@ -146,18 +146,34 @@ class TestDateFromImg:
         assert result == "2025-01-17"
     
     def test_date_from_img_invalid(self):
-        """Test invalid date returns the raw value"""
+        """Test invalid date returns 'unknown' when no index provided"""
         img = {"startdate": "invalid"}
         result = date_from_img(img)
-        # Should return the raw value when parsing fails
-        assert result == "invalid"
+        # Should return 'unknown' when parsing fails and no fallback index
+        assert result == "unknown"
+    
+    def test_date_from_img_invalid_with_index(self):
+        """Test invalid date uses fallback index to estimate date"""
+        from datetime import datetime, timedelta
+        img = {"startdate": "invalid"}
+        result = date_from_img(img, fallback_idx=2)
+        # Should estimate date as 2 days ago
+        expected = (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%d")
+        assert result == expected
     
     def test_date_from_img_missing(self):
-        """Test missing date field returns today's date"""
+        """Test missing date field returns 'unknown' when no index provided"""
         img = {}
         result = date_from_img(img)
-        # Should return today's date in YYYY-MM-DD format
-        from datetime import datetime
+        # Should return 'unknown' when no startdate and no fallback index
+        assert result == "unknown"
+    
+    def test_date_from_img_missing_with_index(self):
+        """Test missing date uses fallback index to estimate date"""
+        from datetime import datetime, timedelta
+        img = {}
+        result = date_from_img(img, fallback_idx=0)
+        # Should estimate date as today
         expected = datetime.utcnow().strftime("%Y-%m-%d")
         assert result == expected
 

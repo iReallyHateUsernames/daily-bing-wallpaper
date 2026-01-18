@@ -82,28 +82,28 @@ def load_config() -> dict:
         logger.warning(f"Could not load config file: {e}")
         return {}
 
-def fetch_image_json(mkt: str, idx: int) -> Optional[dict]:
+def fetch_images_json(mkt: str, idx: int, count: int) -> List[dict]:
+    """Fetch multiple images at once from Bing API"""
     url = (
         f"{BING_BASE}/HPImageArchive.aspx?"
-        f"format=js&idx={idx}&n=1&mkt={urllib.parse.quote(mkt)}"
+        f"format=js&idx={idx}&n={count}&mkt={urllib.parse.quote(mkt)}"
     )
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
         data = r.json()
         imgs = data.get("images") or []
-        result = imgs[0] if imgs else None
-        if result:
-            logger.info(f"Fetched image metadata for market={mkt}, idx={idx}")
+        if imgs:
+            logger.info(f"Fetched {len(imgs)} image(s) metadata for market={mkt}, idx={idx}, count={count}")
         else:
-            logger.warning(f"No images found for market={mkt}, idx={idx}")
-        return result
+            logger.warning(f"No images found for market={mkt}, idx={idx}, count={count}")
+        return imgs
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch image metadata: {e}")
-        return None
+        logger.error(f"Failed to fetch images metadata: {e}")
+        return []
     except Exception as e:
         logger.error(f"Unexpected error fetching metadata: {e}", exc_info=True)
-        return None
+        return []
 
 def build_candidate_urls(img: dict, preferred_res: List[str]) -> List[str]:
     urls = []
@@ -172,15 +172,28 @@ def extract_slug(img: dict) -> str:
     slug = slug.split("_", 1)[0]
     return slug or "unknown"
 
-def date_from_img(img: dict) -> str:
+def date_from_img(img: dict, fallback_idx: Optional[int] = None) -> str:
     raw = img.get("startdate")  # yyyyMMdd
-    try:
-        return datetime.strptime(raw, "%Y%m%d").strftime("%Y-%m-%d")
-    except Exception:
-        return raw or datetime.utcnow().strftime("%Y-%m-%d")
+    if raw:
+        try:
+            return datetime.strptime(raw, "%Y%m%d").strftime("%Y-%m-%d")
+        except Exception:
+            logger.warning(f"Invalid date format in startdate: {raw}")
+    
+    # If no valid startdate, try to use the image's index position to estimate the date
+    # idx=0 is today, idx=1 is yesterday, etc.
+    if fallback_idx is not None:
+        from datetime import timedelta
+        estimated_date = datetime.utcnow() - timedelta(days=fallback_idx)
+        logger.warning(f"Missing startdate, estimating date based on index {fallback_idx}: {estimated_date.strftime('%Y-%m-%d')}")
+        return estimated_date.strftime("%Y-%m-%d")
+    
+    # Last resort: return "unknown" to preserve order without incorrect dates
+    logger.error("Cannot determine date for image - no startdate and no index")
+    return "unknown"
 
-def build_filename(img: dict, ct: str, name_mode: str = "slug") -> str:
-    d = date_from_img(img)
+def build_filename(img: dict, ct: str, name_mode: str = "slug", img_idx: Optional[int] = None) -> str:
+    d = date_from_img(img, img_idx)
     slug = extract_slug(img)
     title = img.get("title") or ""
     if name_mode == "title" and title:
@@ -202,22 +215,35 @@ def set_wallpaper(path: Path):
     if ok == 0:
         raise ctypes.WinError()
 
-def pick_and_download(markets: List[str], idx: int, preferred_res: List[str]) -> Optional[Tuple[bytes, str, dict]]:
+def fetch_all_images(markets: List[str], count: int, preferred_res: List[str]) -> List[Tuple[bytes, str, dict]]:
+    """Fetch all images at once from the first available market"""
     last = None
     for mkt in markets:
         try:
-            img = fetch_image_json(mkt, idx)
-            if not img:
+            imgs = fetch_images_json(mkt, 0, count)
+            if not imgs:
                 continue
-            urls = build_candidate_urls(img, preferred_res)
-            data, ct = download_first(urls)
-            return data, ct, img
+            
+            results = []
+            for img in imgs:
+                try:
+                    urls = build_candidate_urls(img, preferred_res)
+                    data, ct = download_first(urls)
+                    results.append((data, ct, img))
+                except Exception as e:
+                    logger.warning(f"Failed to download image: {e}")
+                    continue
+            
+            if results:
+                return results
         except Exception as e:
             last = e
+            logger.warning(f"Failed to fetch from market {mkt}: {e}")
             continue
+    
     if last:
-        print(f"Warnung idx={idx}: {last}", file=sys.stderr)
-    return None
+        logger.error(f"All markets failed: {last}")
+    return []
 
 def main():
     logger.info("=== Bing Wallpaper Downloader Starting ===")
@@ -265,14 +291,19 @@ def main():
                 return cand
             i += 1
 
-    for idx in range(0, min(8, max(1, args.count))):
-        logger.info(f"Fetching image idx={idx}")
-        res = pick_and_download(markets, idx, preferred_res)
-        if not res:
-            logger.warning(f"Failed to download image idx={idx}")
-            continue
-        data, ct, img = res
-        fname = build_filename(img, ct, name_mode=args.name_mode)
+    # Fetch all images at once
+    logger.info(f"Fetching {args.count} images from markets: {markets}")
+    all_images = fetch_all_images(markets, min(8, max(1, args.count)), preferred_res)
+    
+    if not all_images:
+        logger.warning("Failed to fetch any images")
+        print("Keine Bilder konnten heruntergeladen werden.", file=sys.stderr)
+        return 1
+
+    logger.info(f"Successfully fetched {len(all_images)} images")
+
+    for idx, (data, ct, img) in enumerate(all_images):
+        fname = build_filename(img, ct, name_mode=args.name_mode, img_idx=idx)
         target = out_dir / fname
 
         if args.mode == "skip" and target.exists():
